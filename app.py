@@ -59,6 +59,61 @@ def github():
     token = os.environ.get(
         'GITHUB_TOKEN', 'YOUR_GITHUB_TOKEN')
     GITHUB_URL = f"https://api.github.com/"
+    
+    if repo_name[0] == 'X':
+        stars_count=[]
+        repo_list = repo_name.split()
+        repo_list.pop(0)
+        for i in repo_list:
+            GITHUB_URL = f"https://api.github.com/"
+            headers = {
+            "Authorization": f'token {token}'
+            }
+            params = {
+            "state": "open"
+            }
+            repository_url = GITHUB_URL + "repos/" + i
+            # Fetch GitHub data from GitHub API
+            repository = requests.get(repository_url, headers=headers)
+            # Convert the data obtained from GitHub API to JSON format
+            repository = repository.json()
+            stars_count.append([i.split("/")[1], repository["stargazers_count"]])
+        json_response_stars = {
+        "stars": stars_count
+        }
+        print(json_response_stars)
+        return jsonify(json_response_stars)
+    
+    elif repo_name[0] == 'Y':
+        fork_count=[]
+
+        repo_list = repo_name.split()
+        repo_list.pop(0)
+        for i in repo_list:
+            GITHUB_URL = f"https://api.github.com/"
+            headers = {
+            "Authorization": f'token {token}'
+            }
+            params = {
+            "state": "open"
+            }
+            print(headers)
+            repository_url = GITHUB_URL + "repos/" + i
+            # Fetch GitHub data from GitHub API
+            repository = requests.get(repository_url, headers=headers)
+            # Convert the data obtained from GitHub API to JSON format
+            repository = repository.json()
+            print(repository)
+            fork_count.append([i.split("/")[1], repository["forks_count"]])
+        json_response_fork = {
+        "forks": fork_count
+        }
+        print(json_response_fork)
+        return jsonify(json_response_fork)
+    
+
+    
+    
     headers = {
         "Authorization": f'token {token}'
     }
@@ -70,20 +125,25 @@ def github():
     repository = requests.get(repository_url, headers=headers)
     # Convert the data obtained from GitHub API to JSON format
     repository = repository.json()
+    
+    
+
 
     today = date.today()
 
     issues_reponse = []
-    # Iterating to get issues for every month for the past 12 months
-    for i in range(12):
+    pull_req_response = []
+    commit_response = []
+    # Iterating to get issues for every month for the past 24 months
+    for i in range(24):
         last_month = today + dateutil.relativedelta.relativedelta(months=-1)
         types = 'type:issue'
         repo = 'repo:' + repo_name
         ranges = 'created:' + str(last_month) + '..' + str(today)
         # By default GitHub API returns only 30 results per page
-        # The maximum number of results per page is 100
+        # The maximum number of results per page is 300
         # For more info, visit https://docs.github.com/en/rest/reference/repos 
-        per_page = 'per_page=100'
+        per_page = 'per_page=300'
         # Search query will create a query to fetch data for a given repository in a given time range
         search_query = types + ' ' + repo + ' ' + ranges
 
@@ -130,11 +190,49 @@ def github():
         today = last_month
 
     df = pd.DataFrame(issues_reponse)
+    
+
 
     # Daily Created Issues
+    print(df.tail())
     df_created_at = df.groupby(['created_at'], as_index=False).count()
     dataFrameCreated = df_created_at[['created_at', 'issue_number']]
     dataFrameCreated.columns = ['date', 'count']
+    
+    '''
+    Weekly Created Issues
+    Format the data by grouping the data by month
+    ''' 
+    created_at = df['created_at']
+    week_issue_created = pd.to_datetime(
+        pd.Series(created_at), format='%Y-%m-%d')
+    week_issue_created.index = week_issue_created.dt.to_period('W')
+    week_issue_created = week_issue_created.groupby(level=0).size()
+    week_issue_created = week_issue_created.reindex(pd.period_range(
+        week_issue_created.index.min(), week_issue_created.index.max(), freq='W'), fill_value=0)
+    week_issue_created_dict = week_issue_created.to_dict()
+    week_created_at_issues = []
+    for key in week_issue_created_dict.keys():
+        array = [str(key), week_issue_created_dict[key]]
+        week_created_at_issues.append(array)
+
+    '''
+    Weekly Closed Issues
+    Format the data by grouping the data by month
+    ''' 
+    
+    closed_at = df['closed_at'].sort_values(ascending=True)
+    week_issue_closed = pd.to_datetime(
+        pd.Series(closed_at), format='%Y-%m-%d')
+    week_issue_closed.index = week_issue_closed.dt.to_period('W')
+    week_issue_closed = week_issue_closed.groupby(level=0).size()
+    week_issue_closed = week_issue_closed.reindex(pd.period_range(
+        week_issue_closed.index.min(), week_issue_closed.index.max(), freq='W'), fill_value=0)
+    week_issue_closed_dict = week_issue_closed.to_dict()
+    week_closed_at_issues = []
+    for key in week_issue_closed_dict.keys():
+        array = [str(key), week_issue_closed_dict[key]]
+        week_closed_at_issues.append(array)
 
     '''
     Monthly Created Issues
@@ -143,10 +241,10 @@ def github():
     created_at = df['created_at']
     month_issue_created = pd.to_datetime(
         pd.Series(created_at), format='%Y-%m-%d')
-    month_issue_created.index = month_issue_created.dt.to_period('m')
+    month_issue_created.index = month_issue_created.dt.to_period('M')
     month_issue_created = month_issue_created.groupby(level=0).size()
     month_issue_created = month_issue_created.reindex(pd.period_range(
-        month_issue_created.index.min(), month_issue_created.index.max(), freq='m'), fill_value=0)
+        month_issue_created.index.min(), month_issue_created.index.max(), freq='M'), fill_value=0)
     month_issue_created_dict = month_issue_created.to_dict()
     created_at_issues = []
     for key in month_issue_created_dict.keys():
@@ -161,10 +259,10 @@ def github():
     closed_at = df['closed_at'].sort_values(ascending=True)
     month_issue_closed = pd.to_datetime(
         pd.Series(closed_at), format='%Y-%m-%d')
-    month_issue_closed.index = month_issue_closed.dt.to_period('m')
+    month_issue_closed.index = month_issue_closed.dt.to_period('M')
     month_issue_closed = month_issue_closed.groupby(level=0).size()
     month_issue_closed = month_issue_closed.reindex(pd.period_range(
-        month_issue_closed.index.min(), month_issue_closed.index.max(), freq='m'), fill_value=0)
+        month_issue_closed.index.min(), month_issue_closed.index.max(), freq='M'), fill_value=0)
     month_issue_closed_dict = month_issue_closed.to_dict()
     closed_at_issues = []
     for key in month_issue_closed_dict.keys():
@@ -187,9 +285,20 @@ def github():
         "type": "closed_at",
         "repo": repo_name.split("/")[1]
     }
+    pull_request_body = {
+        "pull": pull_req_response,
+        "type": "pull_request",
+        "repo": repo_name.split("/")[1]
+    }
+    commits_body = {
+        "pull": commit_response,
+        "type": "commits",
+        "repo": repo_name.split("/")[1]
+    }
 
     # Update your Google cloud deployed LSTM app URL (NOTE: DO NOT REMOVE "/")
     LSTM_API_URL = "https://lstm-1-864929836925.us-central1.run.app/" + "api/forecast"
+    LSTM_API_BASE_URL = "https://lstm-1-864929836925.us-central1.run.app/"
 
     '''
     Trigger the LSTM microservice to forecasted the created issues
@@ -199,6 +308,9 @@ def github():
     created_at_response = requests.post(LSTM_API_URL,
                                         json=created_at_body,
                                         headers={'content-type': 'application/json'})
+    
+    
+    
     
     '''
     Trigger the LSTM microservice to forecasted the closed issues
@@ -225,6 +337,8 @@ def github():
         "closedAtImageUrls": {
             **closed_at_response.json(),
         },
+        "created_weekly": week_created_at_issues,
+        "closed_weekly": week_closed_at_issues
     }
     # Return the response back to client (React app)
     return jsonify(json_response)
@@ -232,4 +346,4 @@ def github():
 
 # Run flask app server on port 5000
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5001)
